@@ -63,6 +63,24 @@ app.get('/health', (_req, res) => {
   return res.json({ status: 'ok', network: 'moca-testnet', contract: CONTRACT_ADDRESS })
 })
 
+// Basic root and API index for diagnostics
+app.get('/', (_req, res) => {
+  res.send('zkVerify backend running. See /health and POST /api/* routes.')
+})
+
+app.get('/api', (_req, res) => {
+  res.json({
+    ok: true,
+    routes: [
+      'GET /health',
+      'POST /api/issueCredential',
+      'POST /api/issuecredential (alias)',
+      'POST /api/proofs/generate',
+      'POST /api/verifyProof',
+    ],
+  })
+})
+
 // Generate proof via AIR3 (with offline fallback)
 app.post('/api/proofs/generate', async (req, res) => {
   try {
@@ -98,7 +116,7 @@ app.post('/api/proofs/generate', async (req, res) => {
 })
 
 // Issue credential via AIR3 (server-side to avoid CORS)
-app.post('/api/issueCredential', async (req, res) => {
+async function issueCredentialHandler(req, res) {
   try {
     const { issuer, subject, summaryHash, status } = req.body
     if (!issuer || !subject || !summaryHash || !status) {
@@ -141,7 +159,14 @@ app.post('/api/issueCredential', async (req, res) => {
     console.error('issueCredential error', e?.response?.data || e.message)
     return res.status(500).json({ error: e?.response?.data?.message || e.message })
   }
-})
+}
+
+// Primary route (case-sensitive)
+app.post('/api/issueCredential', issueCredentialHandler)
+// Alias route (all lowercase) to avoid case-sensitivity issues
+app.post('/api/issuecredential', issueCredentialHandler)
+// Helpful GET for diagnostics (method guidance)
+app.get('/api/issueCredential', (_req, res) => res.status(405).json({ error: 'Use POST /api/issueCredential' }))
 
 // Verify proof via AIR3 then record on-chain
 app.post('/api/verifyProof', async (req, res) => {
