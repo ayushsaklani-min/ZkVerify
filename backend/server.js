@@ -46,12 +46,22 @@ function isNetworkError(err) {
 
 let signer, contract
 
+function normalizePrivateKey(raw) {
+  if (!raw) throw new Error('Missing DEPLOYER_PRIVATE_KEY')
+  const trimmed = String(raw).trim()
+  const withPrefix = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`
+  if (withPrefix.length !== 66) {
+    throw new Error('Invalid DEPLOYER_PRIVATE_KEY length (expected 32 bytes / 64 hex chars)')
+  }
+  return withPrefix
+}
+
 function getContract() {
   if (!CONTRACT_ADDRESS) throw new Error('Missing CONTRACT_ADDRESS')
   if (!signer) {
     const provider = new ethers.JsonRpcProvider(RPC_URL)
-    if (!PRIVATE_KEY) throw new Error('Missing DEPLOYER_PRIVATE_KEY')
-    signer = new ethers.Wallet(PRIVATE_KEY, provider)
+    const normalizedKey = normalizePrivateKey(PRIVATE_KEY)
+    signer = new ethers.Wallet(normalizedKey, provider)
   }
   if (!contract) {
     contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer)
@@ -73,12 +83,24 @@ app.get('/api', (_req, res) => {
     ok: true,
     routes: [
       'GET /health',
+      'GET /api/wallet',
       'POST /api/issueCredential',
       'POST /api/issuecredential (alias)',
       'POST /api/proofs/generate',
       'POST /api/verifyProof',
     ],
   })
+})
+
+// Expose backend wallet address so you can fund it with MOCA
+app.get('/api/wallet', (_req, res) => {
+  try {
+    const normalizedKey = normalizePrivateKey(PRIVATE_KEY)
+    const wallet = new ethers.Wallet(normalizedKey)
+    return res.json({ address: wallet.address })
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
 })
 
 // Generate proof via AIR3 (with offline fallback)
@@ -207,7 +229,14 @@ app.post('/api/verifyProof', async (req, res) => {
     const receipt = await tx.wait()
     return res.json({ ok: true, txHash: receipt.hash })
   } catch (e) {
+    const msg = (e?.response?.data?.message || e.message || '').toLowerCase()
     console.error('verifyProof error', e?.response?.data || e.message)
+    if (msg.includes('insufficient funds')) {
+      return res.status(400).json({ error: 'Backend wallet has insufficient MOCA for gas' })
+    }
+    if (msg.includes('invalid') && msg.includes('private key')) {
+      return res.status(500).json({ error: 'Invalid DEPLOYER_PRIVATE_KEY format. Ensure it is a 0x-prefixed 64-hex string.' })
+    }
     return res.status(500).json({ error: e?.response?.data?.message || e.message })
   }
 })
