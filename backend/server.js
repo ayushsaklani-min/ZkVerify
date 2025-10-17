@@ -17,7 +17,7 @@ app.use(cors())
 app.use(express.json())
 
 // Network / contract
-const RPC_URL = process.env.RPC_URL || 'https://testnet-rpc.mechain.tech'
+const RPC_URL = process.env.RPC_URL || 'https://testnet-rpc.mocachain.org'
 const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_CONTRACT_ADDRESS
 
@@ -60,7 +60,7 @@ function getContract() {
 }
 
 app.get('/health', (_req, res) => {
-  return res.json({ status: 'ok', network: 'moca-testnet', contract: CONTRACT_ADDRESS })
+  return res.json({ status: 'ok', network: 'moca-testnet', rpc: RPC_URL, contract: CONTRACT_ADDRESS })
 })
 
 // Basic root and API index for diagnostics
