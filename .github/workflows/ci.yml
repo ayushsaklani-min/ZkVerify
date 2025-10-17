@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install root deps
+        run: npm install
+      - name: Install frontend deps
+        run: cd frontend && npm install
+      - name: Install backend deps
+        run: cd backend && npm install
+      - name: Compile contracts
+        run: npx hardhat compile
+      - name: Run tests
+        run: npx hardhat test
+      - name: Build frontend
+        run: cd frontend && npm run build
+

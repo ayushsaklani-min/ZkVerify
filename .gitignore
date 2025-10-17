@@ -1,0 +1,15 @@
+node_modules
+.env
+.env.*
+artifacts
+cache
+coverage
+.next
+dist
+.DS_Store
+deployment-info.json
+frontend/.next
+frontend/node_modules
+backend/node_modules
+**/*.log
+
