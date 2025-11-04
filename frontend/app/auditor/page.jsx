@@ -8,10 +8,13 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { GradientButton } from '@/components/ui/gradient-button'
 import { Input } from '@/components/ui/input'
 import { AnimatedBadge } from '@/components/ui/animated-badge'
+import AuditorBadge from '@/components/auditor-badge'
+import CredibilityScore from '@/components/credibility-score'
 import { issueCredential } from '@/lib/airkit'
-import { getContractWithSigner } from '@/lib/ethers'
+import { getContractWithSigner, getSigner } from '@/lib/ethers'
 import { keccak256Utf8, uuidToBytes32 } from '@/lib/hash'
-import { FileSignature, Anchor, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ethers } from 'ethers'
+import { FileSignature, Anchor, CheckCircle2, AlertCircle, ExternalLink, Shield } from 'lucide-react'
 
 export default function AuditorPage() {
   const { address } = useAccount()
@@ -23,15 +26,54 @@ export default function AuditorPage() {
   const [isAnchoring, setIsAnchoring] = useState(false)
   const [credential, setCredential] = useState(null)
   const [isAnchored, setIsAnchored] = useState(false)
+  const [isApproved, setIsApproved] = useState(false)
+  const [checkingApproval, setCheckingApproval] = useState(true)
 
   useEffect(() => {
     const cached = localStorage.getItem('zkverify:lastCredential')
     if (cached) setCredential(JSON.parse(cached))
   }, [])
 
+  useEffect(() => {
+    const checkAuditorApproval = async () => {
+      if (!address) {
+        setCheckingApproval(false)
+        return
+      }
+
+      try {
+        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+        // Check approval status
+        const approvalResponse = await fetch(`${BACKEND_URL}/api/auditors/${address}/is-approved`)
+        const approvalData = await approvalResponse.json()
+        
+        if (approvalData.success) {
+          setIsApproved(approvalData.isApproved)
+          
+          // If approved, also fetch full auditor data to show credibility
+          if (approvalData.isApproved) {
+            const auditorResponse = await fetch(`${BACKEND_URL}/api/auditors/${address}`)
+            const auditorData = await auditorResponse.json()
+            // Store for display if needed
+          }
+        }
+      } catch (error) {
+        console.error('Error checking auditor approval:', error)
+      } finally {
+        setCheckingApproval(false)
+      }
+    }
+
+    checkAuditorApproval()
+  }, [address])
+
   async function handleIssueCredential() {
     if (!address) {
       toast.error('Please connect your wallet as auditor')
+      return
+    }
+    if (!isApproved) {
+      toast.error('Only approved auditors can issue credentials')
       return
     }
     if (!project) {
@@ -47,6 +89,8 @@ export default function AuditorPage() {
     setIsIssuing(true)
     try {
       const summaryHash = keccak256Utf8(`${title}|${summary}`)
+      const signer = await getSigner()
+      const issuerSignature = await signer.signMessage(ethers.getBytes(summaryHash))
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
       // Prefer server-issued credential to avoid CORS and secret exposure
       const endpoint = `${BACKEND_URL}/api/issueCredential`
@@ -54,7 +98,7 @@ export default function AuditorPage() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issuer: address, subject: project, summaryHash, status })
+        body: JSON.stringify({ issuer: address, subject: project, summaryHash, status, issuerSignature })
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -66,11 +110,13 @@ export default function AuditorPage() {
       const cred = {
         ...data,
         id: data.credential_id || data.id,
+        onChainId: data.on_chain_id || null,
         issuer: address,
         subject: project,
         summaryHash,
         status,
         issuedAt: data.issued_at || new Date().toISOString(),
+        serverSignature: data.server_signature || null
       }
       setCredential(cred)
       setIsAnchored(false)
@@ -97,18 +143,36 @@ export default function AuditorPage() {
     setIsAnchoring(true)
     try {
       const contract = await getContractWithSigner()
-      const idBytes32 = uuidToBytes32(credential.id)
-      const tx = await contract.anchorCredential(
+      const signer = await getSigner()
+      const idBytes32 = credential.onChainId || uuidToBytes32(credential.id)
+      
+      // Create message hash for signing: keccak256(abi.encodePacked(id, subject, summaryHash))
+      // This must match the contract's verification logic exactly
+      const messageHash = ethers.keccak256(
+        ethers.solidityPacked(['bytes32', 'address', 'bytes32'], [
+          idBytes32,
+          credential.subject || project,
+          credential.summaryHash
+        ])
+      )
+      
+      // Sign the message hash with Ethereum message prefix (\x19Ethereum Signed Message:\n32)
+      // The signMessage() function automatically adds this prefix
+      const signature = await signer.signMessage(ethers.getBytes(messageHash))
+      
+      // Use issueCredential with signature instead of anchorCredential
+      const tx = await contract.issueCredential(
         idBytes32,
+        credential.subject,
         credential.summaryHash,
-        address
+        signature
       )
       await tx.wait()
       setIsAnchored(true)
       toast.success('🎉 Credential anchored on Moca Chain!')
     } catch (e) {
       console.error(e)
-      toast.error('❌ Failed to anchor credential')
+      toast.error(`❌ Failed to anchor credential: ${e.message}`)
     } finally {
       setIsAnchoring(false)
     }
@@ -128,9 +192,103 @@ export default function AuditorPage() {
             <FileSignature className="h-8 w-8 text-white" />
           </div>
         </div>
-        <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Auditor Dashboard</h1>
+        <div className="flex items-center justify-center gap-4 mb-4">
+          <h1 className="text-4xl md:text-5xl font-bold text-white">Auditor Dashboard</h1>
+          {address && <AuditorBadge address={address} showScore={true} size="lg" />}
+        </div>
         <p className="text-white/60 text-lg">Issue verifiable audit credentials and anchor them on-chain</p>
+        
+        {address && (
+          <div className="flex items-center justify-center gap-6 mt-6">
+            <CredibilityScore address={address} size="md" showBreakdown={true} />
+            <a
+              href={`/auditor/reputation?address=${address}`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white text-sm"
+            >
+              View Full Reputation
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        )}
       </motion.div>
+
+      {/* Approval Status with Trust Indicators */}
+      {address && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+        >
+          <GlassCard className={`p-6 ${isApproved ? 'border-2 border-green-400/30' : ''}`}>
+            {checkingApproval ? (
+              <div className="flex items-center gap-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span className="text-white">Checking auditor approval status...</span>
+              </div>
+            ) : isApproved ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="h-6 w-6 text-green-400" />
+                    <div>
+                      <h3 className="text-white font-semibold">Verified Trusted Auditor</h3>
+                      <p className="text-white/60 text-sm">Your credibility has been verified and you can issue credentials</p>
+                    </div>
+                  </div>
+                  <AuditorBadge address={address} showScore={true} />
+                </div>
+                
+                {/* Trust Verification Details */}
+                <div className="p-4 bg-green-500/10 border border-green-400/20 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="h-4 w-4 text-green-400" />
+                    <span className="text-sm font-medium text-green-300">Trust Verification Complete</span>
+                  </div>
+                  <div className="text-xs text-white/70 space-y-1">
+                    <div>✓ Admin-approved auditor status verified</div>
+                    <div>✓ Credibility score calculated from verified work history</div>
+                    <div>✓ Credibility credential issued upon approval</div>
+                    <div>✓ External platform activity verified (GitHub, Code4rena, Immunefi)</div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+                  <a
+                    href={`/auditor/reputation?address=${address}`}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors text-white text-sm"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View Full Credibility Report
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-6 w-6 text-yellow-400" />
+                  <div>
+                    <h3 className="text-white font-semibold">Approval Required</h3>
+                    <p className="text-white/60 text-sm">
+                      You need to be approved by an admin to issue credentials.
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Onboarding Information */}
+                <div className="p-4 bg-yellow-500/10 border border-yellow-400/20 rounded-lg">
+                  <h4 className="text-sm font-medium text-yellow-300 mb-2">How to Get Approved:</h4>
+                  <div className="text-xs text-white/70 space-y-1">
+                    <div>1. Contact the platform administrator</div>
+                    <div>2. Provide your GitHub, Code4rena, and Immunefi handles</div>
+                    <div>3. Admin will verify your work history and issue a credibility credential</div>
+                    <div>4. Once approved, you'll be able to issue audit credentials</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </GlassCard>
+        </motion.div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* Issue Credential Card */}
@@ -207,16 +365,38 @@ export default function AuditorPage() {
               <GradientButton
                 onClick={handleIssueCredential}
                 isLoading={isIssuing}
-                disabled={!address}
+                disabled={!address || !isApproved}
                 className="w-full"
               >
                 {isIssuing ? 'Issuing Credential...' : 'Issue Credential'}
               </GradientButton>
 
               {!address && (
-                <div className="flex items-center gap-2 text-yellow-400 text-sm">
+                <div className="flex items-center gap-2 text-yellow-400 text-sm p-3 bg-yellow-500/10 rounded-lg">
                   <AlertCircle className="h-4 w-4" />
                   <span>Connect wallet to continue</span>
+                </div>
+              )}
+
+              {address && !isApproved && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-red-400 text-sm p-3 bg-red-500/10 rounded-lg">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Only verified trusted auditors can issue credentials</span>
+                  </div>
+                  <div className="text-xs text-white/60 p-3 bg-white/5 rounded-lg">
+                    <div className="font-medium mb-1">Trust Requirements:</div>
+                    <div>• Admin approval with credibility verification</div>
+                    <div>• Verified work history from GitHub, Code4rena, or Immunefi</div>
+                    <div>• Credibility credential issued upon approval</div>
+                  </div>
+                </div>
+              )}
+
+              {address && isApproved && (
+                <div className="flex items-center gap-2 text-green-400 text-sm p-3 bg-green-500/10 rounded-lg border border-green-400/20">
+                  <Shield className="h-4 w-4" />
+                  <span>✓ Your auditor status is verified and trusted</span>
                 </div>
               )}
             </div>

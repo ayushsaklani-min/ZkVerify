@@ -1,0 +1,173 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_trustedProver",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "proofId",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "subject",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "issuer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "gasUsed",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "inputsHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ProofVerified",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousProver",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newProver",
+        "type": "address"
+      }
+    ],
+    "name": "TrustedProverUpdated",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "admin",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "proofId",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "issuer",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "subject",
+            "type": "address"
+          },
+          {
+            "internalType": "bytes",
+            "name": "proof",
+            "type": "bytes"
+          },
+          {
+            "internalType": "bytes",
+            "name": "signature",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct ZKVerifier.ProofPayload",
+        "name": "payload",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "publicInputs",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "verifyProof",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "transferAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_trustedProver",
+        "type": "address"
+      }
+    ],
+    "name": "setTrustedProver",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "trustedProver",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
+

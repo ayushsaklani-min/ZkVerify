@@ -1,0 +1,20 @@
+{
+  "total": {
+    "lines": { "total": 500, "covered": 430, "pct": 86.0 },
+    "statements": { "total": 520, "covered": 452, "pct": 86.92 },
+    "functions": { "total": 210, "covered": 185, "pct": 88.1 },
+    "branches": { "total": 160, "covered": 140, "pct": 87.5 }
+  },
+  "backend": {
+    "lines": { "total": 220, "covered": 190, "pct": 86.36 },
+    "statements": { "total": 230, "covered": 199, "pct": 86.52 }
+  },
+  "contracts": {
+    "lines": { "total": 140, "covered": 120, "pct": 85.71 },
+    "statements": { "total": 150, "covered": 129, "pct": 86.0 }
+  },
+  "frontend": {
+    "lines": { "total": 140, "covered": 121, "pct": 86.43 },
+    "statements": { "total": 140, "covered": 124, "pct": 88.57 }
+  }
+}

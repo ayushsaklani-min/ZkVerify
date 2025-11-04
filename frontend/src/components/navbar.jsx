@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Shield, Menu, X, Home, User, FileCheck, Search } from 'lucide-react'
+import { Shield, Menu, X, Home, User, FileCheck, Search, FileText, Settings, BarChart3 } from 'lucide-react'
 import { ConnectButton } from '@/components/connect-button'
 
 export function Navbar() {
@@ -13,9 +13,12 @@ export function Navbar() {
 
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
+    { name: 'Apply', href: '/apply', icon: FileText },
     { name: 'Auditor', href: '/auditor', icon: User },
     { name: 'Project', href: '/project', icon: FileCheck },
     { name: 'Verify', href: '/verify', icon: Search },
+    { name: 'Metrics', href: '/metrics', icon: BarChart3 },
+    { name: 'Admin', href: '/admin', icon: Settings },
   ]
 
   return (

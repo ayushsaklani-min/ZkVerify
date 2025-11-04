@@ -1,14 +1,13 @@
 /**
- * AIR3 SDK Integration
+ * AIR Kit SDK Integration
  * 
- * Real AIR3 API implementation for credential issuance, proof generation, and verification.
- * This replaces the mock implementation with actual AIR3 API calls.
+ * Client-side helpers that proxy AIR Kit operations through the backend REST API.
  */
 
 import axios from 'axios';
 
-// Create AIR3 API client
-const client = axios.create({
+// Direct AIR API client (used only when backend proxy is unavailable)
+const air3Client = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE || 'https://api.sandbox.air3.com',
   headers: {
     'x-partner-id': process.env.NEXT_PUBLIC_PARTNER_ID,
@@ -17,170 +16,213 @@ const client = axios.create({
 });
 
 /**
- * Issue a new credential via AIR3
+ * Issue a new credential via AIR Kit SDK
  * @param {Object} params - Credential parameters
  * @param {string} params.issuer - Issuer address (mapped to issuer_did)
  * @param {string} params.subject - Subject (project) address (mapped to subject_did)
  * @param {string} params.summaryHash - Hash of the audit summary
  * @param {string} params.status - Verification status
- * @returns {Promise<Object>} Credential object from AIR3
+ * @returns {Promise<Object>} Credential object from AIR Kit
  */
-export async function issueCredential({ issuer, subject, summaryHash, status }) {
+export async function issueCredential({ issuer, subject, summaryHash, status, issuerSignature }) {
   try {
-    const payload = {
-      partner_id: process.env.NEXT_PUBLIC_PARTNER_ID,
-      issuer_did: process.env.NEXT_PUBLIC_ISSUER_DID,
-      subject_did: subject, // Using wallet address as subject_did
-      verifier_did: process.env.NEXT_PUBLIC_VERIFIER_DID,
-      credential_type: 'SmartContractAudit',
-      logo_url: process.env.NEXT_PUBLIC_LOGO_URL,
-      website_url: process.env.NEXT_PUBLIC_WEBSITE_URL,
-      summary_hash: summaryHash,
-      status,
-      metadata: {
-        name: process.env.NEXT_PUBLIC_PARTNER_NAME || 'zkVerify',
-        issuer_address: issuer
-      },
-      jwks_url: process.env.NEXT_PUBLIC_JWKS_URL
-    };
+    console.log('🎫 AIR Kit: Issuing credential via backend...', { subject, status });
 
-    console.log('🎫 AIR3: Issuing credential...', { subject, status });
-    const response = await client.post('/issuer/credentials', payload);
+    // Use backend endpoint (server securely handles AIR Kit auth)
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+    if (!issuerSignature) {
+      throw new Error('issuerSignature is required when issuing credentials');
+    }
+    const response = await fetch(`${BACKEND_URL}/api/issueCredential`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issuer, subject, summaryHash, status, issuerSignature })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error?.error || `Issue failed (${response.status})`);
+    }
+    
+    const data = await response.json();
     
     const credential = {
-      ...response.data,
+      ...data,
       // Keep compatibility with frontend
-      id: response.data.credential_id,
+      id: data.credential_id || data.id,
+      onChainId: data.on_chain_id || null,
       issuer,
       subject,
       summaryHash,
       status,
-      issuedAt: response.data.issued_at || new Date().toISOString(),
+      issuedAt: data.issued_at || new Date().toISOString(),
+      serverSignature: data.server_signature || null,
       schema: 'air3-audit-v1',
       type: 'SmartContractAudit',
       version: '1.0.0'
     };
 
-    console.log('✅ AIR3: Credential issued', credential);
+    console.log('✅ AIR Kit: Credential issued', credential);
     return credential;
   } catch (error) {
-    console.error('❌ AIR3: Credential issuance failed', error.response?.data || error.message);
-    throw new Error(`Failed to issue credential: ${error.response?.data?.message || error.message}`);
+    console.error('❌ AIR Kit: Credential issuance failed', error.message);
+    throw new Error(`Failed to issue credential: ${error.message}`);
   }
 }
 
 /**
- * Generate a zero-knowledge proof for a credential via AIR3
+ * Generate a zero-knowledge proof for a credential via AIR Kit SDK
  * @param {Object} credential - The credential to prove
- * @returns {Promise<Object>} Proof object from AIR3
+ * @returns {Promise<Object>} Proof object from AIR Kit
  */
 export async function generateProof(credential) {
   try {
-    const payload = {
-      credential_id: credential.credential_id || credential.id,
-      verifier_did: process.env.NEXT_PUBLIC_VERIFIER_DID
-    };
-
-    console.log('🔐 AIR3: Generating proof...', payload);
-    const response = await client.post('/proofs/generate', payload);
+    console.log('🔐 AIR Kit: Generating proof via backend...', credential);
+    
+    // Use backend endpoint which proxies AIR Kit
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+    const response = await fetch(`${BACKEND_URL}/api/proofs/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credentialId: credential.credential_id || credential.id })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Proof generation failed (${response.status})`);
+    }
+    
+    const data = await response.json();
     
     const proof = {
-      ...response.data,
-      // Keep compatibility with frontend
-      proofId: response.data.proof_id,
+      ...data,
+      proofId: data.proof_id,
       credentialId: credential.credential_id || credential.id,
+       credentialOnChainId: data.on_chain_id || null,
+       on_chain_id: data.on_chain_id || null,
       credential,
-      valid: response.data.valid !== false,
+      valid: data.valid !== false,
       generatedAt: Date.now(),
-      proofData: response.data.proof_data || {}
+      proofData: data.proof_data || {},
+      stats: data.stats || null
     };
 
-    console.log('✅ AIR3: Proof generated', proof);
+    console.log('✅ AIR Kit: Proof generated', proof);
     return proof;
   } catch (error) {
-    console.error('❌ AIR3: Proof generation failed', error.response?.data || error.message);
-    throw new Error(`Failed to generate proof: ${error.response?.data?.message || error.message}`);
+    console.error('❌ AIR Kit: Proof generation failed', error.message);
+    throw new Error(`Failed to generate proof: ${error.message}`);
   }
 }
 
 /**
- * Verify a zero-knowledge proof via AIR3
+ * Verify a zero-knowledge proof via AIR Kit SDK
  * @param {Object} proof - The proof to verify
  * @returns {Promise<boolean>} Verification result
  */
 export async function verifyProof(proof) {
   try {
-    const payload = {
-      proof_id: proof.proof_id || proof.proofId,
-      verifier_did: process.env.NEXT_PUBLIC_VERIFIER_DID
-    };
-
-    console.log('🔍 AIR3: Verifying proof...', payload);
-    const response = await client.post('/proofs/verify', payload);
+    console.log('🔍 AIR Kit: Verifying proof via backend...', proof);
     
-    const isValid = response.data.valid === true;
-    console.log(`${isValid ? '✅' : '❌'} AIR3: Proof verification ${isValid ? 'PASSED' : 'FAILED'}`);
+    // Use backend endpoint which proxies AIR Kit
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+    const response = await fetch(`${BACKEND_URL}/api/verifyProof`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proof })
+    });
     
-    return isValid;
+    if (!response.ok) {
+      throw new Error(`Proof verification failed (${response.status})`);
+    }
+    
+    const data = await response.json();
+    const isValid = data.ok === true;
+    
+    console.log(`${isValid ? '✅' : '❌'} AIR Kit: Proof verification ${isValid ? 'PASSED' : 'FAILED'}`);
+    
+    return { ok: isValid, txHash: data.txHash, gasUsed: data.gasUsed };
   } catch (error) {
-    console.error('❌ AIR3: Proof verification failed', error.response?.data || error.message);
-    return false;
+    console.error('❌ AIR Kit: Proof verification failed', error.message);
+    return { ok: false, error: error.message };
   }
 }
 
 /**
- * Get credential by ID (AIR3 implementation)
+ * Get credential by ID (AIR Kit implementation)
  * @param {string} credentialId - The credential ID
  * @returns {Promise<Object|null>} Credential object or null
  */
 export async function getCredential(credentialId) {
   try {
-    console.log('📡 AIR3: Fetching credential...', credentialId);
-    const response = await client.get(`/issuer/credentials/${credentialId}`);
+    console.log('📡 AIR Kit: Fetching credential...', credentialId);
+    
+    // Use backend endpoint if available, otherwise fallback to direct AIR REST
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/credentials/${credentialId}`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (e) {
+      console.warn('Backend endpoint not available, using legacy method');
+    }
+    
+    // Fallback to legacy client (if API endpoint is available)
+    const response = await air3Client.get(`/issuer/credentials/${credentialId}`);
     return response.data;
   } catch (error) {
-    console.error('❌ AIR3: Get credential failed', error.response?.data || error.message);
+    console.error('❌ AIR Kit: Get credential failed', error.message);
     return null;
   }
 }
 
 /**
- * List credentials for an issuer (AIR3 implementation)
+ * List credentials for an issuer (AIR Kit implementation)
  * @param {string} issuerAddress - The issuer address
  * @returns {Promise<Array>} Array of credentials
  */
 export async function listCredentials(issuerAddress) {
   try {
-    console.log('📡 AIR3: Listing credentials for issuer...', issuerAddress);
-    const response = await client.get('/issuer/credentials', {
+    console.log('📡 AIR Kit: Listing credentials for issuer...', issuerAddress);
+    
+    // Use backend endpoint if available
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/credentials?issuer=${issuerAddress}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.credentials || [];
+      }
+    } catch (e) {
+      console.warn('Backend endpoint not available, using legacy method');
+    }
+    
+    // Fallback to legacy client
+    const response = await air3Client.get('/issuer/credentials', {
       params: {
         issuer_did: process.env.NEXT_PUBLIC_ISSUER_DID
       }
     });
     return response.data.credentials || [];
   } catch (error) {
-    console.error('❌ AIR3: List credentials failed', error.response?.data || error.message);
+    console.error('❌ AIR Kit: List credentials failed', error.message);
     return [];
   }
 }
 
 /**
- * Health check for AIR3 service
+ * Health check for AIR Kit service
  * @returns {Promise<Object>} Service status
  */
 export async function healthCheck() {
   try {
-    const response = await client.get('/health');
-    return {
-      status: 'healthy',
-      version: response.data.version || '1.0.0',
-      timestamp: new Date().toISOString(),
-      services: {
-        credential: 'operational',
-        proof: 'operational',
-        verification: 'operational'
-      }
-    };
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+    const res = await fetch(`${BACKEND_URL}/health`);
+    if (res.ok) {
+      const data = await res.json();
+      return { status: 'healthy', timestamp: new Date().toISOString(), ...data };
+    }
+    return { status: 'degraded', timestamp: new Date().toISOString() };
   } catch (error) {
     return {
       status: 'unhealthy',

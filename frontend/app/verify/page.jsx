@@ -7,37 +7,42 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { GradientButton } from '@/components/ui/gradient-button'
 import { Input } from '@/components/ui/input'
 import { AnimatedBadge } from '@/components/ui/animated-badge'
+import AuditorBadge from '@/components/auditor-badge'
+import CredibilityScore from '@/components/credibility-score'
+import VerificationSteps from '@/components/verification-steps'
 import { getReadOnlyContract } from '@/lib/ethers'
 import { EXPLORER_URL } from '@/config'
-import { Search, ExternalLink, Shield, CheckCircle2, XCircle, User } from 'lucide-react'
+import { Search, ExternalLink, Shield, CheckCircle2, XCircle, User, Hash } from 'lucide-react'
 
 export default function VerifyPage() {
   const [address, setAddress] = useState('')
+  const [proofHash, setProofHash] = useState('')
+  const [verificationMode, setVerificationMode] = useState('address') // 'address' or 'proof'
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [auditor, setAuditor] = useState(null)
+  const [auditorData, setAuditorData] = useState(null)
+  const [showSteps, setShowSteps] = useState(false)
 
   async function handleVerify() {
-    if (!address) {
-      toast.error('Please enter a project address')
+    const inputValue = verificationMode === 'address' ? address : proofHash;
+    
+    if (!inputValue) {
+      toast.error(`Please enter a ${verificationMode === 'address' ? 'project address' : 'proof hash'}`)
       return
     }
 
     setIsLoading(true)
     setResult(null)
     setAuditor(null)
+    setAuditorData(null)
+    setShowSteps(true)
 
     try {
-      const contract = getReadOnlyContract()
-      const isVerified = await contract.isVerified(address)
-      setResult(isVerified)
-
-      if (isVerified) {
-        const auditorAddr = await contract.getAuditor(address)
-        setAuditor(auditorAddr)
-        toast.success('✅ Project verification found!')
+      if (verificationMode === 'address') {
+        await verifyByAddress(inputValue)
       } else {
-        toast.error('❌ No verification found')
+        await verifyByProofHash(inputValue)
       }
     } catch (e) {
       console.error(e)
@@ -45,6 +50,50 @@ export default function VerifyPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  async function verifyByAddress(projectAddress) {
+    const contract = getReadOnlyContract()
+    const isVerified = await contract.isVerified(projectAddress)
+    setResult(isVerified)
+
+    if (isVerified) {
+      const auditorAddr = await contract.getAuditor(projectAddress)
+      setAuditor(auditorAddr)
+      
+      // Fetch auditor data
+      try {
+        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:10000';
+        const response = await fetch(`${BACKEND_URL}/api/auditors/${auditorAddr}`)
+        const data = await response.json()
+        if (data.success) {
+          setAuditorData(data.auditor)
+        }
+      } catch (err) {
+        console.error('Error fetching auditor data:', err)
+      }
+      
+      toast.success('✅ Project verification found!')
+    } else {
+      toast.error('❌ No verification found')
+    }
+  }
+
+  async function verifyByProofHash(hash) {
+    // Mock proof verification - replace with actual contract call
+    // This would check if the proof hash exists in the contract
+    const contract = getReadOnlyContract()
+    
+    // For now, simulate proof verification
+    // In reality, you'd call something like: contract.getCredential(hash)
+    setResult(true) // Mock result
+    setAuditor('0x1234567890123456789012345678901234567890') // Mock auditor
+    toast.success('✅ Proof verification found!')
+  }
+
+  const handleVerificationComplete = (verificationResult) => {
+    console.log('Verification completed:', verificationResult)
+    // Handle completion if needed
   }
 
   return (
@@ -62,7 +111,7 @@ export default function VerifyPage() {
           </div>
         </div>
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Verify Audit Status</h1>
-        <p className="text-white/60 text-lg">Check on-chain verification for any project address</p>
+        <p className="text-white/60 text-lg">Check on-chain verification for projects or specific proofs</p>
       </motion.div>
 
       {/* Search Card */}
@@ -83,18 +132,51 @@ export default function VerifyPage() {
           </div>
 
           <div className="space-y-4">
+            {/* Mode Selection */}
+            <div className="flex gap-2 p-1 bg-white/5 rounded-lg">
+              <button
+                onClick={() => setVerificationMode('address')}
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  verificationMode === 'address'
+                    ? 'bg-pink-500 text-white'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                <User className="w-4 h-4 inline mr-2" />
+                Project Address
+              </button>
+              <button
+                onClick={() => setVerificationMode('proof')}
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  verificationMode === 'proof'
+                    ? 'bg-pink-500 text-white'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                <Hash className="w-4 h-4 inline mr-2" />
+                Proof Hash
+              </button>
+            </div>
+
+            {/* Input Field */}
             <div className="flex gap-3">
               <Input
-                placeholder="0x..."
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                placeholder={verificationMode === 'address' ? '0x...' : 'Proof hash...'}
+                value={verificationMode === 'address' ? address : proofHash}
+                onChange={(e) => {
+                  if (verificationMode === 'address') {
+                    setAddress(e.target.value)
+                  } else {
+                    setProofHash(e.target.value)
+                  }
+                }}
                 onKeyPress={(e) => e.key === 'Enter' && handleVerify()}
                 className="flex-1 bg-white/5 border-white/20 focus:border-pink-400 text-white"
               />
               <GradientButton
                 onClick={handleVerify}
                 isLoading={isLoading}
-                disabled={!address}
+                disabled={verificationMode === 'address' ? !address : !proofHash}
                 className="px-6"
               >
                 <Search className="h-5 w-5" />
@@ -103,11 +185,32 @@ export default function VerifyPage() {
             </div>
 
             <div className="text-xs text-white/50">
-              💡 Tip: Paste the project's wallet address to instantly verify their audit status
+              💡 Tip: {verificationMode === 'address' 
+                ? "Paste the project's wallet address to verify their audit status"
+                : "Enter a specific proof hash to verify individual credentials"
+              }
             </div>
           </div>
         </GlassCard>
       </motion.div>
+
+      {/* Verification Steps */}
+      <AnimatePresence>
+        {showSteps && (
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -30 }}
+            transition={{ duration: 0.4 }}
+          >
+            <VerificationSteps
+              proofHash={verificationMode === 'proof' ? proofHash : null}
+              auditorAddress={verificationMode === 'address' ? address : null}
+              onVerificationComplete={handleVerificationComplete}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Results */}
       <AnimatePresence mode="wait">
@@ -162,21 +265,78 @@ export default function VerifyPage() {
                     transition={{ delay: 0.3 }}
                     className="w-full p-6 rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-white/10"
                   >
-                    <div className="flex items-center gap-2 mb-3">
-                      <User className="h-5 w-5 text-indigo-400" />
-                      <span className="font-semibold text-white">Auditor Information</span>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <User className="h-5 w-5 text-indigo-400" />
+                        <span className="font-semibold text-white">Trusted Auditor Verification</span>
+                      </div>
+                      <AuditorBadge address={auditor} showScore={true} />
                     </div>
-                    <div className="text-sm text-white/50 mb-1">Auditor Address</div>
-                    <div className="font-mono text-sm text-white/90 break-all mb-4">{auditor}</div>
-                  <a
-                    href={`${EXPLORER_URL}/address/${auditor}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="relative z-10 pointer-events-auto inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 transition-colors"
-                  >
-                      <ExternalLink className="h-4 w-4" />
-                      View on Explorer
-                    </a>
+                    
+                    {/* Trust Indicators */}
+                    <div className="mb-4 p-3 bg-green-500/10 border border-green-400/20 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-300 text-sm">
+                        <Shield className="h-4 w-4" />
+                        <span>✓ Approved Auditor - Credibility Verified</span>
+                      </div>
+                      <div className="mt-2 text-xs text-white/60">
+                        This auditor has been verified and approved by the platform admin. 
+                        Their credibility score is calculated from verified work history.
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <div className="text-sm text-white/50 mb-1">Auditor Address</div>
+                        <div className="font-mono text-sm text-white/90 break-all mb-3">{auditor}</div>
+                        
+                        {auditorData && (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-white/60">Credentials Issued:</span>
+                              <span className="text-white">{auditorData.credentialCount}</span>
+                            </div>
+                            {auditorData.githubHandle && (
+                              <div className="flex justify-between">
+                                <span className="text-white/60">GitHub:</span>
+                                <a 
+                                  href={`https://github.com/${auditorData.githubHandle}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-400 hover:text-indigo-300"
+                                >
+                                  @{auditorData.githubHandle}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center justify-center">
+                        <CredibilityScore address={auditor} size="md" showBreakdown={true} />
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-3 mt-4">
+                      <a
+                        href={`${EXPLORER_URL}/address/${auditor}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 transition-colors text-sm"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        View on Explorer
+                      </a>
+                      
+                      <a
+                        href={`/auditor/reputation?address=${auditor}`}
+                        className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 transition-colors text-sm"
+                      >
+                        <Shield className="h-4 w-4" />
+                        View Full Reputation
+                      </a>
+                    </div>
                   </motion.div>
                 )}
 

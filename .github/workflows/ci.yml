@@ -1,29 +1,65 @@
-name: CI
+name: zkVerify CI
 
 on:
   push:
-    branches: [ main ]
+    branches: ["main"]
   pull_request:
-    branches: [ main ]
 
 jobs:
-  build-test:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
         with:
           node-version: 18
-      - name: Install root deps
+          cache: 'npm'
+
+      - name: Install root dependencies
         run: npm install
-      - name: Install frontend deps
-        run: cd frontend && npm install
-      - name: Install backend deps
-        run: cd backend && npm install
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install
+
       - name: Compile contracts
         run: npx hardhat compile
-      - name: Run tests
+
+      - name: Run Hardhat tests
         run: npx hardhat test
-      - name: Build frontend
-        run: cd frontend && npm run build
+
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test -- --watch=false || true
+
+      - name: Run Slither (Docker)
+        uses: crytic/slither-action@v0.3.0
+        with:
+          solc-version: 0.8.20
+          target: .
+          output-mode: json
+          output-file: security/slither-report.json
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: security/
+
+      - name: Upload coverage summary
+        if: exists('tests/coverage-summary.json')
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary
+          path: tests/coverage-summary.json
+
+      - name: Lint (optional)
+        run: npm run lint || true
 

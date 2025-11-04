@@ -1,0 +1,19 @@
+{
+  "solcRemaps": {},
+  "solcVersion": "0.8.20",
+  "detectorsToDisable": [],
+  "print": {
+    "json": true,
+    "sarif": false
+  },
+  "exclude": {
+    "paths": [
+      "node_modules",
+      "frontend",
+      "backend"
+    ]
+  }
+}
+
+
+

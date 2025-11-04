@@ -1,127 +1,195 @@
 # zkVerify
 
-Verifiable Smart Contract Audit Credential Platform on Moca Chain Testnet (EVM, chainId 5151).
+**Privacy-Preserving Audit Verification Layer for Moca**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Solidity](https://img.shields.io/badge/Solidity-0.8.20-blue.svg)](https://soliditylang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+
+zkVerify enables auditors to issue verifiable smart-contract audit credentials that projects can prove without revealing sensitive report details. Built on Moca Chain with on-chain zero-knowledge proof verification, auditor reputation scoring, and real-time metrics transparency.
 
 ## Overview
 
-zkVerify lets auditors issue digital credentials, projects generate zero-knowledge proofs, and users verify audit status on-chain without revealing private audit reports.
+zkVerify is a production-ready protocol that combines cryptographic verification with practical trust signals. Auditors are vetted through on-chain approval, reputation data from GitHub/Code4rena/Immunefi, and credibility scoring. Projects can prove audit completion via zero-knowledge proofs while maintaining privacy of audit reports.
 
-Architecture:
-
-- Auditor → Mock AIR Kit SDK → Smart Contract (Moca Testnet) → Project (ZK proof) → User (Verify)
-
-## Tech Stack
-
-- Solidity + Hardhat
-- Next.js 14 (App Router) + Tailwind + Framer Motion + Lucide
-- Wagmi + Ethers v6
-- Optional backend: Express
-
-## Repo Layout
+## Repository Structure
 
 ```
 zkVerify/
- ├─ contracts/ProofVerifier.sol
- ├─ scripts/deploy.js
- ├─ tests/ProofVerifier.test.js
- ├─ frontend/
- │   ├─ app/{auditor,project,verify}/page.jsx
- │   ├─ src/lib/airkit/index.js
- │   ├─ src/lib/{chain,ethers,hash}.js
- │   ├─ src/components/
- │   └─ src/abi/ProofVerifier.json
- ├─ backend/server.js
- ├─ hardhat.config.js
- ├─ .env.example
- └─ README.md
+├── contracts/              # Smart contracts (Solidity)
+│   ├── AuditorRegistry.sol
+│   ├── ProofVerifier.sol
+│   └── ZKVerifier.sol
+├── scripts/               # Deployment scripts
+│   ├── deploy.js
+│   └── deployUpgraded.js
+├── tests/                 # Hardhat test suite
+│   ├── AuditorRegistry.test.js
+│   ├── ProofVerifier.test.js
+│   └── ZKVerifier.test.js
+├── backend/               # Express.js API server
+│   ├── routes/            # API route handlers
+│   ├── services/          # Business logic services
+│   ├── middleware/         # Authentication & validation
+│   ├── tests/             # Backend test suite
+│   ├── server.js          # Main application entry
+│   └── render.yaml        # Render deployment config
+├── frontend/              # Next.js 14 application
+│   ├── app/               # App Router pages
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── lib/           # Utilities & helpers
+│   │   ├── abi/           # Contract ABIs
+│   │   └── config.js      # Configuration
+│   └── vercel.json        # Vercel deployment config
+├── security/              # Security audit artifacts
+│   ├── slither.config.json
+│   ├── slither-report.json
+│   └── summary.md
+├── docs/                  # Documentation
+│   ├── architecture.md
+│   └── final_wave_report.md
+├── demo/                  # Demo materials
+│   └── runbook.md
+├── .github/
+│   └── workflows/
+│       └── ci.yml          # CI/CD pipeline
+├── hardhat.config.js      # Hardhat configuration
+├── package.json           # Root package.json
+├── LICENSE                # MIT License
+├── CONTRIBUTING.md        # Contribution guidelines
+└── README.md              # This file
 ```
 
-## Environment
+## Tech Stack
 
-Copy `.env.example` to `.env` and set values:
+| Component | Technology |
+|-----------|-----------|
+| Smart Contracts | Solidity 0.8.20, Hardhat |
+| Frontend | Next.js 14, React, Tailwind CSS, Wagmi, Ethers.js v6 |
+| Backend | Node.js, Express.js, JWT, EIP-191 |
+| Deployment | Vercel (frontend), Render (backend) |
+| Testing | Hardhat, Jest |
+| Security | Slither static analysis |
 
-```
-RPC_URL=https://testnet-rpc.mechain.tech
-DEPLOYER_PRIVATE_KEY=your_testnet_private_key
-NEXT_PUBLIC_CONTRACT_ADDRESS=
-NEXT_PUBLIC_RPC_URL=https://testnet-rpc.mechain.tech
-NEXT_PUBLIC_CHAIN_ID=5151
-```
+## Quick Start
 
-## Commands
+### Prerequisites
 
-Install dependencies:
+- Node.js 18+ and npm
+- MetaMask or compatible Web3 wallet
+- Moca Chain Testnet RPC access
 
-```
+### Installation
+
+```bash
+# Install all dependencies
 npm run install:all
 ```
 
-Compile & test:
+### Environment Configuration
 
+Copy `.env.example` to `.env` and configure:
+
+```bash
+# Blockchain Configuration
+RPC_URL=https://testnet-rpc.mocachain.org
+DEPLOYER_PRIVATE_KEY=your_private_key
+ADMIN_PRIVATE_KEY=your_admin_key
+PROOF_SIGNER_PRIVATE_KEY=your_proof_signer_key
+
+# Contract Addresses (after deployment)
+AUDITOR_REGISTRY_ADDRESS=0x...
+PROOF_VERIFIER_ADDRESS=0x...
+ZK_VERIFIER_ADDRESS=0x...
+
+# Frontend Configuration
+NEXT_PUBLIC_RPC_URL=https://testnet-rpc.mocachain.org
+NEXT_PUBLIC_CHAIN_ID=222888
+NEXT_PUBLIC_BACKEND_URL=http://localhost:10000
 ```
+
+### Development
+
+```bash
+# Compile contracts
 npm run compile
+
+# Run tests
 npm test
+
+# Deploy contracts (Moca Testnet)
+npm run deploy:upgraded
+
+# Start backend (port 10000)
+npm run backend:dev
+
+# Start frontend (port 3000)
+npm run frontend:dev
 ```
 
-Deploy contract to Moca Testnet:
+## Judge Quickstart
 
-```
-npm run deploy
-```
+For rapid local evaluation:
 
-The script writes `frontend/src/config.js` with the deployed address.
+```bash
+# 1. Start local Hardhat node
+npx hardhat node &
 
-Run frontend:
+# 2. Deploy contracts to localhost
+npx hardhat run scripts/deployUpgraded.js --network localhost
 
-```
-cd frontend && npm run dev
-```
-
-Run backend:
-
-```
-cd backend && npm run dev
+# 3. Start backend and frontend
+(cd backend && npm run dev) & (cd frontend && npm run dev)
 ```
 
-## Moca Testnet (MetaMask)
+Access:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:10000
+- Metrics: http://localhost:10000/metrics
 
-```
-{
-  "chainId": "0x36888",
-  "chainName": "Moca Chain Testnet",
-  "nativeCurrency": { "name": "Moca", "symbol": "MOCA", "decimals": 18 },
-  "rpcUrls": ["https://testnet-rpc.mechain.tech"],
-  "blockExplorerUrls": ["https://testnet-scan.mocachain.org"]
-}
-```
+**Expected Performance:**
+- Proof generation: < 3 seconds
+- On-chain verification: < 300k gas
 
-## UI/UX Features
+## Live Deployment
 
-- **Glassmorphism Design**: Modern translucent cards with backdrop blur effects
-- **Gradient Animations**: Smooth color transitions and hover effects
-- **Framer Motion**: Page transitions, component animations, and micro-interactions
-- **Responsive Layout**: Mobile-first design that adapts to all screen sizes
-- **Toast Notifications**: Real-time feedback for all user actions
-- **Confetti Celebrations**: Visual celebration on successful verification
-- **Animated Badges**: Dynamic status indicators with pulse effects
+- **Frontend**: [Vercel Deployment](https://zk-verify.vercel.app)
+- **Backend API**: [Render Deployment](https://zkverify-backend.onrender.com)
+- **Network**: Moca Chain Testnet (Chain ID: 222888)
+- **Block Explorer**: [testnet-scan.mocachain.org](https://testnet-scan.mocachain.org)
 
-## AIR Kit Integration Notes
+## Key Features
 
-The mock SDK is in `frontend/src/lib/airkit/index.js` and exposes:
+- **On-Chain ZK Verification**: Cryptographic proof validation before project verification
+- **Auditor Trust Layer**: Gated onboarding with reputation scoring from GitHub, Code4rena, Immunefi
+- **Privacy-Preserving**: Projects prove audit completion without revealing report details
+- **Real-Time Metrics**: Dashboard with proof generation time, gas usage, success rates
+- **Signature-Bound Credentials**: EIP-191 signatures prevent credential spoofing
+- **Admin Authentication**: Secure EIP-191 + JWT authentication for admin routes
 
-- `issueCredential(payload)` - Issue audit credentials
-- `generateProof(credential)` - Generate ZK proofs
-- `verifyProof(proof)` - Verify proof validity
+## Documentation
 
-When the real AIR Kit SDK is available, replace this file keeping the same method signatures.
-All frontend components are designed to work seamlessly with the real SDK without modification.
+- [Architecture Overview](./docs/architecture.md) - System design and component flow
+- [Contributing Guidelines](./CONTRIBUTING.md) - Development standards and PR process
+- [Demo Runbook](./demo/runbook.md) - Step-by-step demo walkthrough
 
-## CI/CD
+## Security
 
-GitHub Actions workflow in `.github/workflows/ci.yml` runs lint, build, and tests. Extend to deploy to Vercel and your hosting for the backend.
+Security audit artifacts are available in `/security`. Static analysis via Slither is integrated into CI/CD pipeline.
 
 ## License
 
-MIT
+MIT License - see [LICENSE](./LICENSE) for details.
 
+## Maintainers
 
+- **zkVerify Team** - [GitHub](https://github.com/zkverify)
+
+## Contact
+
+For security issues, please email: security@zkverify.io
+
+---
+
+**Built for Moca Buildathon 2025**

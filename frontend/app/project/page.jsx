@@ -18,6 +18,7 @@ export default function ProjectPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [verified, setVerified] = useState(false)
+  const [txResult, setTxResult] = useState(null)
 
   useEffect(() => {
     const cached = localStorage.getItem('zkverify:lastCredential')
@@ -45,10 +46,13 @@ export default function ProjectPage() {
         p = {
           proofId: data.proof_id,
           credentialId: credential.credential_id || credential.id,
+          credentialOnChainId: data.on_chain_id || null,
+          on_chain_id: data.on_chain_id || null,
           credential,
           valid: data.valid !== false,
           generatedAt: Date.now(),
-          proofData: data.proof_data || {}
+          proofData: data.proof_data || {},
+          stats: data.stats || null
         }
       } else {
         // fallback to direct AIR3 call (may fail if AIR3 unreachable)
@@ -92,7 +96,13 @@ export default function ProjectPage() {
         throw new Error(data?.error || 'Backend verification failed')
       }
 
+      const data = await res.json()
+      if (!data.ok) {
+        throw new Error(data?.error || 'Proof verification failed')
+      }
+
       setVerified(true)
+      setTxResult({ txHash: data.txHash, gasUsed: data.gasUsed })
       toast.success('🎉 Verification recorded on-chain!')
 
       // Trigger confetti
@@ -106,6 +116,7 @@ export default function ProjectPage() {
       console.error(e)
       toast.error('❌ Submission failed')
       setVerified(false)
+      setTxResult(null)
     } finally {
       setIsSubmitting(false)
     }
@@ -158,6 +169,12 @@ export default function ProjectPage() {
                     <div className="text-xs font-medium text-white/50 mb-1">Credential ID</div>
                     <div className="font-mono text-sm text-white/90 break-all">{credential.id}</div>
                   </div>
+                  {credential.onChainId && (
+                    <div>
+                      <div className="text-xs font-medium text-white/50 mb-1">On-chain ID</div>
+                      <div className="font-mono text-xs text-white/80 break-all">{credential.onChainId}</div>
+                    </div>
+                  )}
                   <div className="h-px bg-white/10" />
                   <div>
                     <div className="text-xs font-medium text-white/50 mb-1">Status</div>
@@ -180,7 +197,19 @@ export default function ProjectPage() {
                       <span className="font-semibold text-green-400">Proof Generated</span>
                     </div>
                     <div className="text-xs font-medium text-white/50 mb-1">Proof ID</div>
-                    <div className="font-mono text-xs text-white/80 break-all">{proof.proofId}</div>
+                    <div className="font-mono text-xs text-white/80 break-all mb-2">{proof.proofId}</div>
+                    {proof.credentialOnChainId && (
+                      <div className="text-xs text-white/50">
+                        On-chain Credential:&nbsp;
+                        <span className="font-mono text-white/80 break-all">{proof.credentialOnChainId}</span>
+                      </div>
+                    )}
+                    {proof.stats && (
+                      <div className="mt-3 text-xs text-white/50 space-y-1">
+                        <div>Generation Time: {proof.stats.duration_ms} ms</div>
+                        <div>Proof Size: {proof.stats.proof_size_bytes} bytes</div>
+                      </div>
+                    )}
                   </motion.div>
                 ) : (
                   <GradientButton
@@ -256,6 +285,26 @@ export default function ProjectPage() {
                   Your audit status has been recorded on Moca Chain Testnet
                 </p>
                 <AnimatedBadge status="verified" className="mt-6" />
+                {txResult && (
+                  <div className="mt-4 text-xs text-white/50 space-y-1">
+                    {txResult.txHash && (
+                      <div>
+                        Tx Hash:{' '}
+                        <a
+                          href={`https://testnet-scan.mocachain.org/tx/${txResult.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-300 hover:text-indigo-200"
+                        >
+                          {txResult.txHash.slice(0, 10)}...{txResult.txHash.slice(-6)}
+                        </a>
+                      </div>
+                    )}
+                    {txResult.gasUsed && (
+                      <div>Gas Used: {txResult.gasUsed}</div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             ) : proof ? (
               <div className="space-y-6">

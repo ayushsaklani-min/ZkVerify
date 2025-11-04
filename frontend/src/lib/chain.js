@@ -1,5 +1,5 @@
 export const mocaChain = {
-  id: 5151,
+  id: 222888, // Standardized to match .env
   name: 'Moca Chain Testnet',
   network: 'moca-testnet',
   nativeCurrency: { name: 'Moca', symbol: 'MOCA', decimals: 18 },

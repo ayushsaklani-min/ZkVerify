@@ -93,6 +93,13 @@ export default function HomePage() {
               transition={{ delay: 0.4, duration: 0.6 }}
             >
           <Link
+            href="/apply"
+            className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold rounded-xl shadow-lg shadow-green-500/50 hover:shadow-xl hover:shadow-green-500/60 transition-all duration-300"
+          >
+            Apply as Auditor
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </Link>
+          <Link
             href="/auditor"
             className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/60 transition-all duration-300"
           >

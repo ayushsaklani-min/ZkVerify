@@ -1,0 +1,340 @@
+/**
+ * zkVerify — Moca Buildathon 2025 | Auditable Zero-Knowledge Verification Layer
+ * 
+ * Application submission routes for auditor onboarding.
+ * Handles application storage and admin notifications.
+ */
+
+const express = require('express');
+const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
+const nodemailer = require('nodemailer');
+
+const router = express.Router();
+
+// Path to store pending applications (JSON file)
+const APPLICATIONS_FILE = path.join(__dirname, '..', 'pending-applications.json');
+
+/**
+ * Initialize applications file if it doesn't exist
+ */
+function initApplicationsFile() {
+  if (!fs.existsSync(APPLICATIONS_FILE)) {
+    fs.writeFileSync(APPLICATIONS_FILE, JSON.stringify([], null, 2));
+  }
+}
+
+/**
+ * Read pending applications
+ */
+function getPendingApplications() {
+  initApplicationsFile();
+  try {
+    const data = fs.readFileSync(APPLICATIONS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading applications file:', error);
+    return [];
+  }
+}
+
+/**
+ * Save pending applications
+ */
+function saveApplications(applications) {
+  initApplicationsFile();
+  fs.writeFileSync(APPLICATIONS_FILE, JSON.stringify(applications, null, 2));
+}
+
+/**
+ * Create email transporter (supports Gmail, custom SMTP, or console fallback)
+ */
+function createEmailTransporter() {
+  // If SMTP config provided, use it
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    // Check if it's Outlook/Office 365
+    const isOutlook = process.env.SMTP_HOST.includes('outlook') || 
+                      process.env.SMTP_HOST.includes('office365') ||
+                      process.env.SMTP_USER.includes('outlook');
+    
+    const transportOptions = {
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false, // Outlook/Office365 uses STARTTLS on port 587
+      requireTLS: true,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    };
+
+    // Add TLS options for Outlook
+    if (isOutlook) {
+      transportOptions.tls = {
+        rejectUnauthorized: false, // Some Outlook servers have certificate issues
+        minVersion: 'TLSv1.2'
+      };
+    }
+    
+    return nodemailer.createTransport(transportOptions);
+  }
+
+  // Try Gmail if GMAIL_USER and GMAIL_APP_PASSWORD provided
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    // Remove any spaces or newlines from App Password
+    const appPassword = process.env.GMAIL_APP_PASSWORD.trim().replace(/\s+/g, '');
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER.trim(),
+        pass: appPassword,
+      },
+    });
+  }
+
+  // Fallback: create test transporter (won't send but won't error)
+  return nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false,
+    auth: {
+      user: 'test',
+      pass: 'test',
+    },
+  });
+}
+
+/**
+ * Send email notification to admin
+ */
+async function notifyAdmin(application) {
+  const adminEmail = process.env.ADMIN_EMAIL || 'saklaniayush97@gmail.com';
+  const websiteUrl = process.env.WEBSITE_URL || 'http://localhost:3000';
+  
+  // Log to console always
+  console.log('\n📧 ============================================');
+  console.log('📧 NEW AUDITOR APPLICATION RECEIVED');
+  console.log('📧 ============================================');
+  console.log(`📧 Wallet Address: ${application.walletAddress}`);
+  console.log(`📧 GitHub: ${application.githubHandle || 'Not provided'}`);
+  console.log(`📧 Code4rena: ${application.code4renaHandle || 'Not provided'}`);
+  console.log(`📧 Immunefi: ${application.immunefiHandle || 'Not provided'}`);
+  console.log(`📧 Message: ${application.message || 'None'}`);
+  console.log(`📧 Submitted: ${application.submittedAt}`);
+  console.log(`📧 ============================================\n`);
+
+  try {
+    const transporter = createEmailTransporter();
+    
+    // Check if we have real email config
+    const hasEmailConfig = (process.env.SMTP_HOST || process.env.GMAIL_USER) && 
+                          (process.env.SMTP_USER || process.env.GMAIL_USER);
+
+    if (hasEmailConfig) {
+      const mailOptions = {
+        from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@zkverify.com',
+        to: adminEmail,
+        subject: '🔔 New Auditor Application - zkVerify',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #6366f1;">New Auditor Application Received</h2>
+            <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #333;">Application Details:</h3>
+              <p><strong>Wallet Address:</strong> <code style="background: #e0e0e0; padding: 2px 6px; border-radius: 4px;">${application.walletAddress}</code></p>
+              <p><strong>GitHub Handle:</strong> ${application.githubHandle ? `<a href="https://github.com/${application.githubHandle}">${application.githubHandle}</a>` : 'Not provided'}</p>
+              <p><strong>Code4rena Handle:</strong> ${application.code4renaHandle ? `<a href="https://code4rena.com/@${application.code4renaHandle}">${application.code4renaHandle}</a>` : 'Not provided'}</p>
+              <p><strong>Immunefi Handle:</strong> ${application.immunefiHandle ? `<a href="https://immunefi.com/profile/${application.immunefiHandle}">${application.immunefiHandle}</a>` : 'Not provided'}</p>
+              ${application.message ? `<p><strong>Message:</strong><br>${application.message.replace(/\n/g, '<br>')}</p>` : ''}
+              <p><strong>Submitted:</strong> ${new Date(application.submittedAt).toLocaleString()}</p>
+            </div>
+            <div style="margin: 20px 0;">
+              <a href="${websiteUrl}/admin" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                Review Application →
+              </a>
+            </div>
+            <p style="color: #666; font-size: 12px;">
+              This is an automated notification from zkVerify. Please review and approve or reject the application.
+            </p>
+          </div>
+        `,
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Email sent successfully to ${adminEmail}`);
+    } else {
+      console.log(`⚠️  Email not configured. Application logged to console and saved to pending-applications.json`);
+      console.log(`💡 To enable emails, add SMTP config or GMAIL_USER/GMAIL_APP_PASSWORD to .env`);
+    }
+  } catch (error) {
+    console.error('❌ Error sending email:', error.message);
+    console.log('Application saved successfully, but email notification failed.');
+    // Don't throw - application should still be saved even if email fails
+  }
+}
+
+/**
+ * POST /api/apply
+ * Submit auditor application
+ */
+router.post('/', async (req, res) => {
+  try {
+    const { walletAddress, githubHandle, code4renaHandle, immunefiHandle, message } = req.body;
+
+    // Validation
+    if (!walletAddress || !ethers.isAddress(walletAddress)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid wallet address format'
+      });
+    }
+
+    // Check if at least one handle is provided
+    if (!githubHandle && !code4renaHandle && !immunefiHandle) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide at least one platform handle (GitHub, Code4rena, or Immunefi)'
+      });
+    }
+
+    // Check if wallet is already approved
+    try {
+      const AuditorRegistryABI = require('../../frontend/src/abi/AuditorRegistry.json');
+      const registryAddress = process.env.AUDITOR_REGISTRY_ADDRESS || process.env.NEXT_PUBLIC_AUDITOR_REGISTRY_ADDRESS;
+      if (registryAddress) {
+        const provider = new ethers.JsonRpcProvider(process.env.RPC_URL || 'https://testnet-rpc.mocachain.org');
+        const registry = new ethers.Contract(registryAddress, AuditorRegistryABI, provider);
+        const isApproved = await registry.isApprovedAuditor(walletAddress);
+        
+        if (isApproved) {
+          return res.status(400).json({
+            success: false,
+            error: 'This wallet address is already approved as an auditor. Please visit the Auditor Dashboard to issue credentials.',
+            alreadyApproved: true
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Could not check approval status:', error.message);
+    }
+
+    // Check if application already exists (pending)
+    const applications = getPendingApplications();
+    const existingApplication = applications.find(
+      app => app.walletAddress.toLowerCase() === walletAddress.toLowerCase()
+    );
+
+    if (existingApplication) {
+      return res.status(400).json({
+        success: false,
+        error: 'An application for this wallet address is already pending review'
+      });
+    }
+
+    // Create application object
+    const application = {
+      walletAddress: walletAddress.toLowerCase(),
+      githubHandle: githubHandle || '',
+      code4renaHandle: code4renaHandle || '',
+      immunefiHandle: immunefiHandle || '',
+      message: message || '',
+      submittedAt: new Date().toISOString(),
+      status: 'pending',
+      reviewedAt: null,
+      reviewedBy: null
+    };
+
+    // Save to file
+    applications.push(application);
+    saveApplications(applications);
+
+    // Notify admin
+    await notifyAdmin(application);
+
+    res.json({
+      success: true,
+      message: 'Application submitted successfully. Admin will review it shortly.',
+      applicationId: application.walletAddress
+    });
+  } catch (error) {
+    console.error('Error submitting application:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to submit application',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/apply/pending
+ * Get pending applications (admin only)
+ */
+router.get('/pending', async (req, res) => {
+  try {
+    // TODO: Add admin authentication
+    const applications = getPendingApplications();
+    const pending = applications.filter(app => app.status === 'pending');
+    
+    res.json({
+      success: true,
+      count: pending.length,
+      applications: pending
+    });
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch applications',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/apply/:address
+ * Check application status for an address
+ */
+router.get('/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    if (!ethers.isAddress(address)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid address format'
+      });
+    }
+
+    const applications = getPendingApplications();
+    const application = applications.find(
+      app => app.walletAddress.toLowerCase() === address.toLowerCase()
+    );
+
+    if (!application) {
+      return res.json({
+        success: true,
+        hasApplication: false,
+        status: null
+      });
+    }
+
+    res.json({
+      success: true,
+      hasApplication: true,
+      status: application.status,
+      submittedAt: application.submittedAt,
+      reviewedAt: application.reviewedAt
+    });
+  } catch (error) {
+    console.error('Error checking application status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check application status',
+      message: error.message
+    });
+  }
+});
+
+module.exports = router;
+

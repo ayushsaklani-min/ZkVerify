@@ -1,5 +1,16 @@
 [
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_auditorRegistry",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
     "anonymous": false,
     "inputs": [
       {
@@ -62,6 +73,43 @@
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "issuer",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "subject",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "summaryHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "CredentialIssued",
+    "type": "event"
+  },
+  {
     "inputs": [
       {
         "internalType": "bytes32",
@@ -82,6 +130,19 @@
     "name": "anchorCredential",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "auditorRegistry",
+    "outputs": [
+      {
+        "internalType": "contract IAuditorRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -106,6 +167,45 @@
   {
     "inputs": [
       {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "name": "credentials",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "issuer",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "summaryHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "project",
         "type": "address"
@@ -117,6 +217,52 @@
         "internalType": "address",
         "name": "",
         "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      }
+    ],
+    "name": "getCredential",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "id",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "issuer",
+            "type": "address"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "summaryHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "uint256",
+            "name": "timestamp",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "signature",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct ProofVerifier.CredentialData",
+        "name": "",
+        "type": "tuple"
       }
     ],
     "stateMutability": "view",
@@ -163,6 +309,34 @@
   {
     "inputs": [
       {
+        "internalType": "bytes32",
+        "name": "id",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "subject",
+        "type": "address"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "summaryHash",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "signature",
+        "type": "bytes"
+      }
+    ],
+    "name": "issueCredential",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "",
         "type": "address"
@@ -198,6 +372,19 @@
       }
     ],
     "name": "recordVerification",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_auditorRegistry",
+        "type": "address"
+      }
+    ],
+    "name": "setAuditorRegistry",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
